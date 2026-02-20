@@ -1,0 +1,106 @@
+You are a senior Flutter engineer + product-minded architect. Build an MVP Flutter app called “LocalTreats” (name can be changed) for gifting curated items from local merchants in Lebanon (e.g., coffee shops, dessert places). The buyer purchases a digital gift with a message; the receiver redeems it at the merchant using a QR/code. This MVP is optimized for “Diaspora → Lebanon gifting” and “curated items,” NOT full merchant menus.
+
+IMPORTANT CONSTRAINTS
+- Do NOT integrate Firebase Dynamic Links (it’s deprecated and shut down). Use standard Universal Links (iOS) + Android App Links + a hosted web landing page that routes into the app when installed, and otherwise shows a mobile web gift page. Keep it simple (no deferred deep linking). Use Flutter routing with go_router + app_links/uni_links style handling. 
+- Build for iOS + Android. Also provide a minimal Flutter Web “merchant redeem portal” (can be in the same repo/app with a /merchant route).
+- Use Firebase as backend (Firestore + Auth + Cloud Functions + Storage), unless you have a simpler alternative. Prefer Firebase.
+- Payment: implement a PaymentProvider abstraction. Provide a “MockPaymentProvider” for local dev and a Stripe-ready implementation skeleton (clearly marked TODO keys). Do not block the app on real payments.
+- Keep merchant catalogs small: 5–15 “gift SKUs” per merchant, NOT full menus.
+
+CORE USER FLOWS
+
+A) Buyer flow (mobile)
+1. Home: choose city/area and browse curated categories (Coffee, Dessert, Meals, Flowers, Wellness).
+2. Merchant page: show merchant info + list of gift SKUs (e.g., “2 Cappuccinos”, “Dessert Box”, “Breakfast Combo”).
+3. Gift customization:
+   - choose SKU
+   - add message (required)
+   - choose theme/card design
+   - optional: schedule send (now or later)
+   - choose delivery channel: WhatsApp / SMS / email (default WhatsApp)
+4. Checkout: pay (Mock provider works in dev), then create GiftOrder in Firestore.
+5. After purchase: show “Share Gift Link” button and “Copy Link”.
+
+B) Receiver flow (no login required for MVP)
+1. Receiver opens gift link:
+   - If app installed, open to Gift Reveal screen.
+   - If not installed, show a mobile web gift page (Firebase Hosting) that displays the gift + message + a “Redeem” button that shows the code/QR (web OK for MVP).
+2. Gift Reveal screen: show animation, message, merchant name, SKU, and “Show QR / Code”.
+3. Redeem screen: display QR and a human-readable redemption code. Also show merchant map/hours (fields from Firestore).
+4. Optional: “Send Thanks” button (sends a simple in-app acknowledgment recorded in Firestore).
+
+C) Merchant redemption flow (Flutter Web portal)
+1. Merchant logs in (email/password) and sees a simple Redeem page.
+2. Redeem by manually entering code (MVP). Optional: camera scan if feasible.
+3. Portal validates code via Cloud Function:
+   - If valid and unredeemed: mark redeemed, record timestamp + merchant staff user id.
+   - If already redeemed/invalid/expired: show clear error.
+
+DATA MODEL (Firestore)
+- merchants:
+  id, name, description, city/area tags, address, geo, phone, hours, logoUrl, coverUrl, isActive
+- gift_products:
+  id, merchantId, title, description, price, currency, imageUrl, category, isActive,
+  substitutionPolicy (string, e.g., “Any hot drink up to $X”)
+- gift_orders:
+  id, buyerContact (email optional), senderName, receiverContact (phone/email), deliveryChannel,
+  productId, merchantId, amount, currency,
+  message, themeId,
+  status: CREATED | PAID | SENT | REDEEMED | CANCELED | EXPIRED,
+  giftToken (random secret), redeemCode (short), qrPayload,
+  createdAt, scheduledSendAt, sentAt, redeemedAt, redeemedByMerchantUserId
+- merchant_users:
+  uid, merchantId, role (owner/staff), isActive
+
+SECURITY / BACKEND RULES
+- Generate redeemCode and giftToken server-side (Cloud Function).
+- Redemption must be done via Cloud Function to prevent client-side fraud.
+- Firestore Security Rules:
+  - Receiver can read a gift only with a valid giftToken.
+  - Merchant users can only access orders for their merchant.
+  - Only Cloud Functions can mark REDEEMED.
+
+UI/UX REQUIREMENTS
+- Modern clean UI, friendly animations on gift reveal.
+- Clear typography, consistent spacing, light/dark theme support.
+- Buyer path should be <= 5 taps to purchase and share.
+- Receiver must be able to redeem even without creating an account.
+
+TECH STACK (Flutter)
+- State management: Riverpod (preferred) or Bloc. Choose one and be consistent.
+- Routing: go_router with deep link handling.
+- Networking: Firebase SDK.
+- QR: use a QR generator package for display. For scanning in merchant portal, optional.
+- Code quality: linting, clean architecture-ish layering (data/domain/presentation), and tests for critical logic.
+
+DELIVERABLES (what to output in the repo)
+1. Flutter app codebase with:
+   - buyer screens: Home, Merchant, GiftCustomize, Checkout, Success/Share
+   - receiver screens: GiftReveal, Redeem
+   - merchant web screens: Login, Redeem, RedemptionHistory
+2. Firebase:
+   - firestore collections structure
+   - security rules file
+   - cloud functions: createGiftOrder (server generates codes), redeemGift, optional sendGift (marks SENT)
+3. Firebase Hosting minimal web landing page:
+   - /g/{orderId}?t={giftToken} shows gift info and redeem code/QR (MVP)
+4. Seed script or admin-only screen to create merchants + products quickly (for MVP).
+5. README:
+   - local setup steps
+   - emulator instructions
+   - how to seed demo merchants/products
+   - how to test buyer->receiver->merchant redemption end-to-end
+6. Provide mock data for 3 merchants and ~8 products each.
+
+ASSUMPTIONS (make these unless impossible)
+- Currency: store currency per product; show USD by default in demo data.
+- Expiry: 90 days from purchase (configurable).
+- Refunds: not implemented in MVP; note TODO.
+
+BUILD STRATEGY
+- Start by generating the project structure + models + routing.
+- Then implement Firebase + mock payment flow.
+- Then implement merchant redemption + cloud functions + rules.
+- Then polish UI and add tests.
+
+When something is unclear, make a reasonable assumption and document it in README. Do not ask me questions; proceed with best defaults.
