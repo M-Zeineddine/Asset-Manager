@@ -1,0 +1,245 @@
+<!doctype html>
+<html>
+  <head>
+    <title>You received a gift! - LocalTreats</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: linear-gradient(135deg, #C44536, #E8634C, #F0A868);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .card {
+        background: rgba(255,255,255,0.95);
+        border-radius: 24px;
+        max-width: 420px;
+        width: 100%;
+        overflow: hidden;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      }
+      .card-header {
+        background: linear-gradient(135deg, THEME_COLOR_1, THEME_COLOR_2, THEME_COLOR_3);
+        padding: 32px 24px;
+        text-align: center;
+        color: white;
+      }
+      .gift-icon { font-size: 48px; margin-bottom: 12px; }
+      .card-header h1 { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+      .card-header p { font-size: 14px; opacity: 0.9; }
+      .card-body { padding: 24px; }
+      .message-box {
+        background: #FFF8F5;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        text-align: center;
+      }
+      .message-text {
+        font-size: 16px;
+        color: #1A1A1A;
+        font-style: italic;
+        line-height: 1.6;
+        margin-bottom: 8px;
+      }
+      .message-from {
+        font-size: 13px;
+        color: #6B6B6B;
+      }
+      .gift-details {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px;
+        background: #f9f9f9;
+        border-radius: 12px;
+        margin-bottom: 20px;
+      }
+      .gift-image {
+        width: 64px;
+        height: 64px;
+        border-radius: 10px;
+        object-fit: cover;
+      }
+      .gift-info h3 { font-size: 16px; font-weight: 600; color: #1A1A1A; }
+      .gift-info p { font-size: 13px; color: #6B6B6B; margin-top: 2px; }
+      .gift-price { font-size: 18px; font-weight: 700; color: #C44536; margin-top: 4px; }
+      .qr-section {
+        text-align: center;
+        padding: 20px;
+        background: #fafafa;
+        border-radius: 12px;
+        margin-bottom: 20px;
+      }
+      .qr-section canvas { margin: 0 auto; }
+      .redeem-code {
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 4px;
+        color: #1A1A1A;
+        margin: 12px 0 4px;
+      }
+      .redeem-label {
+        font-size: 12px;
+        color: #6B6B6B;
+      }
+      .instructions {
+        font-size: 13px;
+        color: #999;
+        text-align: center;
+        margin-top: 8px;
+      }
+      .merchant-info {
+        border-top: 1px solid #eee;
+        padding-top: 16px;
+        margin-top: 4px;
+      }
+      .merchant-info h4 {
+        font-size: 14px;
+        font-weight: 600;
+        color: #1A1A1A;
+        margin-bottom: 8px;
+      }
+      .merchant-detail {
+        font-size: 13px;
+        color: #6B6B6B;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .status-banner {
+        padding: 12px 16px;
+        border-radius: 8px;
+        text-align: center;
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 16px;
+      }
+      .status-redeemed { background: rgba(76,175,80,0.1); color: #4CAF50; }
+      .status-expired { background: rgba(229,57,53,0.1); color: #E53935; }
+      .expiry {
+        font-size: 12px;
+        color: #999;
+        text-align: center;
+        margin-top: 12px;
+      }
+      .error-page {
+        text-align: center;
+        padding: 60px 24px;
+      }
+      .error-page h2 { font-size: 20px; color: #1A1A1A; margin-bottom: 8px; }
+      .error-page p { font-size: 14px; color: #6B6B6B; }
+    </style>
+  </head>
+  <body>
+    <div class="card" id="gift-card">
+      <div class="card-body" style="padding:60px 24px;text-align:center;">
+        <p style="color:#999">Loading your gift...</p>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/qr-code-styling@1.6.0/lib/qr-code-styling.js"></script>
+    <script>
+      (async function() {
+        const card = document.getElementById('gift-card');
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get('t');
+        const pathParts = window.location.pathname.split('/');
+        const orderId = pathParts[pathParts.length - 1];
+
+        if (!orderId || !token) {
+          card.innerHTML = '<div class="error-page"><h2>Gift Not Found</h2><p>This gift link appears to be invalid.</p></div>';
+          return;
+        }
+
+        try {
+          const orderRes = await fetch('/api/orders/' + orderId + '?t=' + token);
+          if (!orderRes.ok) throw new Error('Not found');
+          const order = await orderRes.json();
+
+          const productRes = await fetch('/api/products/' + order.productId);
+          const product = await productRes.json();
+
+          const merchantRes = await fetch('/api/merchants/' + order.merchantId);
+          const merchant = await merchantRes.json();
+
+          const themes = {
+            celebration: ['#C44536', '#E8634C', '#F0A868'],
+            elegant: ['#1A1A1A', '#DAA49A', '#FFFFFF'],
+            warmth: ['#D4A84B', '#E8634C', '#C44536'],
+            nature: ['#6B8E6B', '#DAA49A', '#FFF8F5'],
+            romantic: ['#C44569', '#DAA49A', '#FFF8F5'],
+          };
+          const themeColors = themes[order.themeId] || themes.celebration;
+
+          let statusHtml = '';
+          if (order.status === 'REDEEMED') {
+            statusHtml = '<div class="status-banner status-redeemed">This gift has been redeemed</div>';
+          } else if (order.status === 'EXPIRED') {
+            statusHtml = '<div class="status-banner status-expired">This gift has expired</div>';
+          }
+
+          const expiryDate = new Date(order.expiresAt).toLocaleDateString('en-US', {
+            year: 'numeric', month: 'long', day: 'numeric'
+          });
+
+          card.innerHTML = `
+            <div class="card-header" style="background: linear-gradient(135deg, ${themeColors[0]}, ${themeColors[1]}, ${themeColors[2]})">
+              <div class="gift-icon">&#127873;</div>
+              <h1>You received a gift!</h1>
+              <p>From ${order.senderName}</p>
+            </div>
+            <div class="card-body">
+              ${statusHtml}
+              <div class="message-box">
+                <div class="message-text">"${order.message}"</div>
+                <div class="message-from">&mdash; ${order.senderName}</div>
+              </div>
+              <div class="gift-details">
+                <img src="${product.imageUrl}" class="gift-image" alt="${product.title}" />
+                <div class="gift-info">
+                  <h3>${product.title}</h3>
+                  <p>${merchant.name}</p>
+                  <div class="gift-price">$${product.price}</div>
+                </div>
+              </div>
+              <div class="qr-section">
+                <div id="qr-code"></div>
+                <div class="redeem-label">Redemption Code</div>
+                <div class="redeem-code">${order.redeemCode}</div>
+              </div>
+              <p class="instructions">Show this code to the merchant staff to redeem your gift</p>
+              <div class="merchant-info">
+                <h4>${merchant.name}</h4>
+                <div class="merchant-detail">${merchant.address}</div>
+                <div class="merchant-detail">${merchant.hours}</div>
+                <div class="merchant-detail">${merchant.phone}</div>
+              </div>
+              <p class="expiry">Expires ${expiryDate}</p>
+            </div>
+          `;
+
+          const qrCode = new QRCodeStyling({
+            width: 160,
+            height: 160,
+            data: order.redeemCode,
+            dotsOptions: { color: '#1A1A1A', type: 'rounded' },
+            backgroundOptions: { color: 'transparent' },
+            cornersSquareOptions: { type: 'extra-rounded' },
+            cornersDotOptions: { type: 'dot' },
+            qrOptions: { errorCorrectionLevel: 'H' },
+          });
+          qrCode.append(document.getElementById('qr-code'));
+        } catch (e) {
+          card.innerHTML = '<div class="error-page"><h2>Gift Not Found</h2><p>This gift link may be invalid or expired.</p></div>';
+        }
+      })();
+    </script>
+  </body>
+</html>
