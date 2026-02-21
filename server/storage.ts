@@ -67,8 +67,31 @@ class Storage {
   }
 
   async createOrder(input: CreateGiftOrderInput): Promise<GiftOrder> {
-    const product = this.products.get(input.productId);
-    if (!product) throw new Error("Product not found");
+    const giftType = input.giftType || "ITEM";
+    const merchant = this.merchants.get(input.merchantId);
+    if (!merchant) throw new Error("Merchant not found");
+
+    let amount: number;
+    let currency: string;
+    let productId: string | null = null;
+    let creditAmount: number | null = null;
+
+    if (giftType === "CREDIT") {
+      if (!input.creditAmount || input.creditAmount <= 0) {
+        throw new Error("Credit amount must be positive");
+      }
+      amount = input.creditAmount;
+      creditAmount = input.creditAmount;
+      currency = "LBP";
+    } else {
+      if (!input.productId) throw new Error("Product ID required for ITEM gifts");
+      const product = this.products.get(input.productId);
+      if (!product) throw new Error("Product not found");
+      if (product.merchantId !== input.merchantId) throw new Error("Product does not belong to this merchant");
+      amount = product.price;
+      currency = product.currency;
+      productId = product.id;
+    }
 
     const id = randomUUID();
     const giftToken = randomUUID();
@@ -78,14 +101,16 @@ class Storage {
 
     const order: GiftOrder = {
       id,
+      giftType,
       senderName: input.senderName,
       receiverName: input.receiverName,
       receiverContact: input.receiverContact,
       deliveryChannel: input.deliveryChannel,
-      productId: input.productId,
+      productId,
       merchantId: input.merchantId,
-      amount: product.price,
-      currency: product.currency,
+      amount,
+      creditAmount,
+      currency,
       message: input.message,
       themeId: input.themeId,
       status: "PAID",

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Pressable,
   Platform,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
@@ -20,6 +21,106 @@ import { getApiUrl } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
 import type { Merchant, GiftProduct } from "@/shared/schema";
 
+const CREDIT_PRESETS = [
+  { label: "LBP 500,000", value: 500000 },
+  { label: "LBP 1,000,000", value: 1000000 },
+  { label: "LBP 2,000,000", value: 2000000 },
+];
+
+function formatLBP(amount: number): string {
+  return amount.toLocaleString("en-US");
+}
+
+function StoreCreditSection({ merchant }: { merchant: Merchant }) {
+  const [showCustom, setShowCustom] = useState(false);
+  const [customAmount, setCustomAmount] = useState("");
+
+  const handlePreset = (value: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({
+      pathname: "/gift/customize",
+      params: { giftType: "CREDIT", merchantId: merchant.id, creditAmount: String(value) },
+    });
+  };
+
+  const handleCustom = () => {
+    const parsed = parseInt(customAmount.replace(/[^0-9]/g, ""), 10);
+    if (!parsed || parsed <= 0) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({
+      pathname: "/gift/customize",
+      params: { giftType: "CREDIT", merchantId: merchant.id, creditAmount: String(parsed) },
+    });
+  };
+
+  return (
+    <View style={styles.creditSection}>
+      <View style={styles.creditHeader}>
+        <View style={styles.creditIconWrap}>
+          <Ionicons name="card-outline" size={20} color="#FFF" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.creditTitle}>Store Credit</Text>
+          <Text style={styles.creditSubtitle}>Redeemable on anything at {merchant.name}</Text>
+        </View>
+      </View>
+
+      <View style={styles.presetRow}>
+        {CREDIT_PRESETS.map((preset) => (
+          <Pressable
+            key={preset.value}
+            onPress={() => handlePreset(preset.value)}
+            style={({ pressed }) => [
+              styles.presetPill,
+              pressed && { transform: [{ scale: 0.96 }] },
+            ]}
+          >
+            <Text style={styles.presetAmount}>LBP {formatLBP(preset.value)}</Text>
+            <Ionicons name="gift" size={14} color={Colors.primary} />
+          </Pressable>
+        ))}
+      </View>
+
+      {!showCustom ? (
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync();
+            setShowCustom(true);
+          }}
+          style={styles.customToggle}
+        >
+          <Ionicons name="create-outline" size={16} color={Colors.primary} />
+          <Text style={styles.customToggleText}>Custom amount</Text>
+        </Pressable>
+      ) : (
+        <View style={styles.customRow}>
+          <Text style={styles.customLabel}>LBP</Text>
+          <TextInput
+            style={styles.customInput}
+            value={customAmount}
+            onChangeText={setCustomAmount}
+            placeholder="Enter amount"
+            placeholderTextColor={Colors.textMuted}
+            keyboardType="number-pad"
+            autoFocus
+          />
+          <Pressable
+            onPress={handleCustom}
+            disabled={!customAmount || parseInt(customAmount.replace(/[^0-9]/g, ""), 10) <= 0}
+            style={({ pressed }) => [
+              styles.customSendBtn,
+              (!customAmount || parseInt(customAmount.replace(/[^0-9]/g, ""), 10) <= 0) && { opacity: 0.4 },
+              pressed && { opacity: 0.8 },
+            ]}
+          >
+            <Ionicons name="arrow-forward" size={18} color="#FFF" />
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
+
 function ProductCard({ product, merchant }: { product: GiftProduct; merchant: Merchant }) {
   return (
     <Pressable
@@ -27,7 +128,7 @@ function ProductCard({ product, merchant }: { product: GiftProduct; merchant: Me
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         router.push({
           pathname: "/gift/customize",
-          params: { productId: product.id, merchantId: merchant.id },
+          params: { giftType: "ITEM", productId: product.id, merchantId: merchant.id },
         });
       }}
       style={({ pressed }) => [
@@ -167,6 +268,8 @@ export default function MerchantScreen() {
               </View>
             </View>
 
+            <StoreCreditSection merchant={merchant} />
+
             <Text style={styles.sectionTitle}>Gift Ideas</Text>
           </View>
         }
@@ -278,6 +381,103 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 13,
     color: Colors.textSecondary,
+  },
+  creditSection: {
+    marginHorizontal: 20,
+    marginBottom: 24,
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  creditHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 14,
+  },
+  creditIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  creditTitle: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 16,
+    color: Colors.text,
+  },
+  creditSubtitle: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  presetRow: {
+    gap: 8,
+    marginBottom: 10,
+  },
+  presetPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Colors.background,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  presetAmount: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
+    color: Colors.text,
+  },
+  customToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+  },
+  customToggleText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+    color: Colors.primary,
+  },
+  customRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 4,
+  },
+  customLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  customInput: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontFamily: "Inter_500Medium",
+    fontSize: 15,
+    color: Colors.text,
+  },
+  customSendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
   },
   sectionTitle: {
     fontFamily: "Inter_700Bold",

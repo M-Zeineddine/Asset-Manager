@@ -20,11 +20,17 @@ import { getApiUrl, apiRequest } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
 import type { GiftProduct, Merchant, GiftOrder } from "@/shared/schema";
 
+function formatLBP(amount: number): string {
+  return amount.toLocaleString("en-US");
+}
+
 export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
-    productId: string;
+    giftType?: string;
+    productId?: string;
     merchantId: string;
+    creditAmount?: string;
     message: string;
     senderName: string;
     receiverName: string;
@@ -34,6 +40,9 @@ export default function CheckoutScreen() {
   }>();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
+  const isCredit = params.giftType === "CREDIT";
+  const creditAmount = params.creditAmount ? parseInt(params.creditAmount, 10) : 0;
+
   const { data: product } = useQuery<GiftProduct>({
     queryKey: ["product", params.productId],
     queryFn: async () => {
@@ -41,6 +50,7 @@ export default function CheckoutScreen() {
       const res = await fetch(`${baseUrl}api/products/${params.productId}`);
       return res.json();
     },
+    enabled: !isCredit && !!params.productId,
   });
 
   const { data: merchant } = useQuery<Merchant>({
@@ -54,16 +64,23 @@ export default function CheckoutScreen() {
 
   const orderMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/orders", {
+      const body: any = {
+        giftType: params.giftType || "ITEM",
         senderName: params.senderName,
         receiverName: params.receiverName,
         receiverContact: params.receiverContact,
         deliveryChannel: params.deliveryChannel,
-        productId: params.productId,
         merchantId: params.merchantId,
         message: params.message,
         themeId: params.themeId,
-      });
+      };
+      if (isCredit) {
+        body.creditAmount = creditAmount;
+        body.productId = null;
+      } else {
+        body.productId = params.productId;
+      }
+      const res = await apiRequest("POST", "/api/orders", body);
       return (await res.json()) as GiftOrder;
     },
     onSuccess: (order) => {
@@ -75,7 +92,7 @@ export default function CheckoutScreen() {
           giftToken: order.giftToken,
           receiverName: params.receiverName,
           senderName: params.senderName,
-          productTitle: product?.title || "",
+          productTitle: isCredit ? `Store Credit – LBP ${formatLBP(creditAmount)}` : (product?.title || ""),
           merchantName: merchant?.name || "",
         },
       });
@@ -84,7 +101,15 @@ export default function CheckoutScreen() {
 
   const themeColors = (Colors.themes as any)[params.themeId || "celebration"] || Colors.themes.celebration;
 
-  if (!product || !merchant) {
+  if (!isCredit && !product) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  if (!merchant) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color={Colors.primary} />
@@ -98,6 +123,9 @@ export default function CheckoutScreen() {
       : params.deliveryChannel === "sms"
       ? "SMS"
       : "Email";
+
+  const displayPrice = isCredit ? `LBP ${formatLBP(creditAmount)}` : `$${product!.price}`;
+  const displayTitle = isCredit ? "Store Credit" : product!.title;
 
   return (
     <View style={styles.container}>
@@ -124,7 +152,7 @@ export default function CheckoutScreen() {
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
-            <Ionicons name="gift" size={32} color="rgba(255,255,255,0.9)" />
+            <Ionicons name={isCredit ? "card" : "gift"} size={32} color="rgba(255,255,255,0.9)" />
             <Text style={styles.giftPreviewLabel}>Gift for {params.receiverName}</Text>
             <Text style={styles.giftPreviewMessage} numberOfLines={3}>
               "{params.message}"
@@ -137,20 +165,32 @@ export default function CheckoutScreen() {
           <Text style={styles.summaryTitle}>Order Summary</Text>
 
           <View style={styles.summaryRow}>
-            <Image
-              source={{ uri: product.imageUrl }}
-              style={styles.summaryImage}
-              contentFit="cover"
-            />
+            {isCredit ? (
+              <View style={styles.creditIconBox}>
+                <Ionicons name="card-outline" size={24} color="#FFF" />
+              </View>
+            ) : (
+              <Image
+                source={{ uri: product!.imageUrl }}
+                style={styles.summaryImage}
+                contentFit="cover"
+              />
+            )}
             <View style={styles.summaryInfo}>
-              <Text style={styles.summaryProductTitle}>{product.title}</Text>
+              <Text style={styles.summaryProductTitle}>{displayTitle}</Text>
               <Text style={styles.summaryMerchant}>{merchant.name}</Text>
             </View>
-            <Text style={styles.summaryPrice}>${product.price}</Text>
+            <Text style={styles.summaryPrice}>{displayPrice}</Text>
           </View>
 
           <View style={styles.divider} />
 
+          {isCredit && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Type</Text>
+              <Text style={styles.detailValue}>Store Credit</Text>
+            </View>
+          )}
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Recipient</Text>
             <Text style={styles.detailValue}>{params.receiverName}</Text>
@@ -175,7 +215,7 @@ export default function CheckoutScreen() {
 
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>${product.price}</Text>
+            <Text style={styles.totalValue}>{displayPrice}</Text>
           </View>
         </View>
 
@@ -207,7 +247,7 @@ export default function CheckoutScreen() {
           ) : (
             <>
               <Ionicons name="lock-closed" size={16} color="#FFF" />
-              <Text style={styles.payButtonText}>Pay ${product.price}</Text>
+              <Text style={styles.payButtonText}>Pay {displayPrice}</Text>
             </>
           )}
         </Pressable>
@@ -318,6 +358,14 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 10,
+  },
+  creditIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
   },
   summaryInfo: {
     flex: 1,

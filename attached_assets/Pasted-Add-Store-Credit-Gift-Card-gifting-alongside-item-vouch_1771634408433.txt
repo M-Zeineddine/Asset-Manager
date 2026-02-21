@@ -1,0 +1,56 @@
+Add “Store Credit / Gift Card” gifting alongside item vouchers.
+
+REQUIREMENT
+Support two gift types:
+- ITEM: existing gift_products flow
+- CREDIT: money amount usable on anything at a specific merchant
+Receiver ONLY shows QR/code. ONLY merchant portal (logged-in staff) can redeem and mark REDEEMED.
+
+DATA MODEL
+Update gift_orders:
+- giftType: "ITEM" | "CREDIT" (default "ITEM")
+- creditAmount: number (required when giftType="CREDIT")
+- productRef/productId nullable when CREDIT
+- Keep: merchantRef/merchantId, amount, currency, giftToken, redeemCode, qrPayload, status, timestamps
+For CREDIT, set amount = creditAmount.
+
+UI CHANGES
+1) Merchant page:
+- Add a new section or tab “Store Credit” above the items list.
+- Show preset buttons (LBP 500,000 / 1,000,000 / 2,000,000) + “Custom amount”.
+- Selecting an amount navigates to GiftCustomize with {giftType:"CREDIT", merchantId, creditAmount}.
+
+2) Gift Customize page:
+- If giftType="CREDIT", show editable amount selector (preset pills + custom input) in the summary card.
+- Keep existing fields (senderName, message required, theme, delivery channel, receiver contact, schedule).
+
+3) Checkout:
+- Display summary as “Store Credit at {Merchant} – LBP X”.
+- On “Pay (Mock)”, call backend createGiftOrder with giftType="CREDIT" and creditAmount.
+- Success share link unchanged.
+
+4) Receiver Gift page:
+- If CREDIT, show “Store Credit” + “LBP X credit” + instruction “Apply to your bill”.
+- QR/code display unchanged.
+
+5) Merchant Portal:
+- When redeeming a CREDIT gift, show giftType + creditAmount and mark REDEEMED.
+- MVP rule: one-time full use (no remaining balance / partial redemption).
+
+BACKEND
+Update Cloud Function(s):
+- createGiftOrder: accept giftType and creditAmount; validate:
+  - CREDIT: creditAmount>0 and merchant exists
+  - ITEM: product exists and belongs to merchant
+Generate giftToken + redeemCode server-side as before.
+Store qrPayload including giftType and amount.
+- getGiftPublic: return safe fields including giftType and creditAmount.
+- redeemGift: no changes except show/return giftType and amount; still transactional + prevents double redemption.
+
+SECURITY
+Update Firestore rules/types accordingly (no client-side write to redeemed fields; redemption via Cloud Function only).
+
+TESTS / DEMO
+- Add demo preset amounts and ensure end-to-end:
+  create CREDIT gift -> open /g/:orderId?t=token -> merchant redeem -> status becomes REDEEMED -> receiver shows redeemed state.
+Do not refactor unrelated code; implement minimal changes cleanly.

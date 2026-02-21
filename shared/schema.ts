@@ -29,6 +29,13 @@ export const Category = {
 
 export type CategoryType = typeof Category[keyof typeof Category];
 
+export const GiftType = {
+  ITEM: 'ITEM',
+  CREDIT: 'CREDIT',
+} as const;
+
+export type GiftTypeType = typeof GiftType[keyof typeof GiftType];
+
 export interface Merchant {
   id: string;
   name: string;
@@ -60,13 +67,15 @@ export interface GiftProduct {
 
 export interface GiftOrder {
   id: string;
+  giftType: GiftTypeType;
   senderName: string;
   receiverName: string;
   receiverContact: string;
   deliveryChannel: DeliveryChannelType;
-  productId: string;
+  productId: string | null;
   merchantId: string;
   amount: number;
+  creditAmount: number | null;
   currency: string;
   message: string;
   themeId: string;
@@ -81,14 +90,16 @@ export interface GiftOrder {
 }
 
 export const createGiftOrderSchema = z.object({
+  giftType: z.enum(['ITEM', 'CREDIT']).default('ITEM'),
   senderName: z.string().min(1),
   receiverName: z.string().min(1),
   receiverContact: z.string().min(1),
   deliveryChannel: z.enum(['whatsapp', 'sms', 'email']),
-  productId: z.string().min(1),
+  productId: z.string().nullable().optional(),
   merchantId: z.string().min(1),
   message: z.string().min(1),
   themeId: z.string().default('celebration'),
+  creditAmount: z.number().positive().nullable().optional(),
   scheduledSendAt: z.string().nullable().optional(),
 });
 

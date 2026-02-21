@@ -20,6 +20,10 @@ import { getApiUrl } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
 import type { GiftOrder, GiftProduct, Merchant } from "@/shared/schema";
 
+function formatLBP(amount: number): string {
+  return amount.toLocaleString("en-US");
+}
+
 export default function RedeemScreen() {
   const insets = useSafeAreaInsets();
   const { orderId, giftToken } = useLocalSearchParams<{
@@ -38,6 +42,8 @@ export default function RedeemScreen() {
     },
   });
 
+  const isCredit = order?.giftType === "CREDIT";
+
   const { data: product } = useQuery<GiftProduct>({
     queryKey: ["product", order?.productId],
     queryFn: async () => {
@@ -45,7 +51,7 @@ export default function RedeemScreen() {
       const res = await fetch(`${baseUrl}api/products/${order!.productId}`);
       return res.json();
     },
-    enabled: !!order,
+    enabled: !!order && !isCredit && !!order.productId,
   });
 
   const { data: merchant } = useQuery<Merchant>({
@@ -132,72 +138,102 @@ export default function RedeemScreen() {
           </Text>
         </View>
 
-        {product && merchant && (
-          <View style={styles.giftDetails}>
-            <View style={styles.giftRow}>
-              <Image
-                source={{ uri: product.imageUrl }}
-                style={styles.giftImage}
-                contentFit="cover"
-                transition={200}
-              />
-              <View style={styles.giftInfo}>
-                <Text style={styles.giftTitle}>{product.title}</Text>
-                <Text style={styles.giftMerchant}>{merchant.name}</Text>
-                <Text style={styles.giftPrice}>${product.price}</Text>
+        <View style={styles.giftDetails}>
+          {isCredit ? (
+            <View style={styles.creditInfoSection}>
+              <View style={styles.creditIconBox}>
+                <Ionicons name="card" size={28} color="#FFF" />
+              </View>
+              <View style={styles.creditInfoText}>
+                <Text style={styles.giftTitle}>Store Credit</Text>
+                <Text style={styles.giftMerchant}>{merchant?.name || ""}</Text>
+                <Text style={styles.creditAmountText}>
+                  LBP {formatLBP(order.creditAmount || 0)}
+                </Text>
               </View>
             </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.merchantDetails}>
-              <Text style={styles.merchantDetailsTitle}>Merchant Info</Text>
-
-              <View style={styles.infoRow}>
-                <Ionicons name="location-outline" size={18} color={Colors.primary} />
-                <Text style={styles.infoText}>{merchant.address}</Text>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Ionicons name="time-outline" size={18} color={Colors.primary} />
-                <Text style={styles.infoText}>{merchant.hours}</Text>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Ionicons name="call-outline" size={18} color={Colors.primary} />
-                <Text style={styles.infoText}>{merchant.phone}</Text>
-              </View>
-            </View>
-
-            {product.substitutionPolicy && (
-              <>
-                <View style={styles.divider} />
-                <View style={styles.policySection}>
-                  <Ionicons name="swap-horizontal-outline" size={18} color={Colors.accent} />
-                  <View style={styles.policyContent}>
-                    <Text style={styles.policyTitle}>Substitution Policy</Text>
-                    <Text style={styles.policyText}>
-                      {product.substitutionPolicy}
-                    </Text>
-                  </View>
+          ) : (
+            product && merchant && (
+              <View style={styles.giftRow}>
+                <Image
+                  source={{ uri: product.imageUrl }}
+                  style={styles.giftImage}
+                  contentFit="cover"
+                  transition={200}
+                />
+                <View style={styles.giftInfo}>
+                  <Text style={styles.giftTitle}>{product.title}</Text>
+                  <Text style={styles.giftMerchant}>{merchant.name}</Text>
+                  <Text style={styles.giftPrice}>${product.price}</Text>
                 </View>
-              </>
-            )}
+              </View>
+            )
+          )}
 
-            <View style={styles.divider} />
+          {isCredit && (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.creditNote}>
+                <Ionicons name="information-circle-outline" size={18} color={Colors.primary} />
+                <Text style={styles.creditNoteText}>
+                  This is a one-time use store credit. Present this code to apply the full amount to your bill.
+                </Text>
+              </View>
+            </>
+          )}
 
-            <View style={styles.expiryRow}>
-              <Ionicons name="calendar-outline" size={16} color={Colors.textMuted} />
-              <Text style={styles.expiryText}>
-                Expires {new Date(order.expiresAt).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </Text>
-            </View>
+          {merchant && (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.merchantDetails}>
+                <Text style={styles.merchantDetailsTitle}>Merchant Info</Text>
+
+                <View style={styles.infoRow}>
+                  <Ionicons name="location-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.infoText}>{merchant.address}</Text>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Ionicons name="time-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.infoText}>{merchant.hours}</Text>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Ionicons name="call-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.infoText}>{merchant.phone}</Text>
+                </View>
+              </View>
+            </>
+          )}
+
+          {!isCredit && product?.substitutionPolicy && (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.policySection}>
+                <Ionicons name="swap-horizontal-outline" size={18} color={Colors.accent} />
+                <View style={styles.policyContent}>
+                  <Text style={styles.policyTitle}>Substitution Policy</Text>
+                  <Text style={styles.policyText}>
+                    {product.substitutionPolicy}
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
+
+          <View style={styles.divider} />
+
+          <View style={styles.expiryRow}>
+            <Ionicons name="calendar-outline" size={16} color={Colors.textMuted} />
+            <Text style={styles.expiryText}>
+              Expires {new Date(order.expiresAt).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </Text>
           </View>
-        )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -340,6 +376,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.primary,
     marginTop: 4,
+  },
+  creditInfoSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  creditIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  creditInfoText: {
+    flex: 1,
+  },
+  creditAmountText: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 18,
+    color: Colors.primary,
+    marginTop: 4,
+  },
+  creditNote: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "flex-start",
+    backgroundColor: "rgba(196, 69, 54, 0.04)",
+    padding: 12,
+    borderRadius: 10,
+  },
+  creditNoteText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    color: Colors.textSecondary,
+    flex: 1,
+    lineHeight: 18,
   },
   divider: {
     height: 1,

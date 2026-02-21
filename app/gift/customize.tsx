@@ -19,7 +19,7 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { getApiUrl } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
-import type { GiftProduct, Merchant, DeliveryChannelType } from "@/shared/schema";
+import type { GiftProduct, Merchant, DeliveryChannelType, GiftTypeType } from "@/shared/schema";
 
 const THEMES = [
   { id: "celebration", name: "Celebration", colors: Colors.themes.celebration },
@@ -35,14 +35,33 @@ const CHANNELS: { key: DeliveryChannelType; label: string; icon: string }[] = [
   { key: "email", label: "Email", icon: "mail-outline" },
 ];
 
+const CREDIT_PRESETS = [500000, 1000000, 2000000];
+
+function formatLBP(amount: number): string {
+  return amount.toLocaleString("en-US");
+}
+
 export default function CustomizeScreen() {
   const insets = useSafeAreaInsets();
-  const { productId, merchantId } = useLocalSearchParams<{
-    productId: string;
+  const params = useLocalSearchParams<{
+    giftType?: string;
+    productId?: string;
     merchantId: string;
+    creditAmount?: string;
   }>();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
+  const giftType: GiftTypeType = (params.giftType as GiftTypeType) || "ITEM";
+  const isCredit = giftType === "CREDIT";
+
+  const [creditAmount, setCreditAmount] = useState(
+    params.creditAmount ? parseInt(params.creditAmount, 10) : 500000
+  );
+  const [customCreditInput, setCustomCreditInput] = useState(
+    params.creditAmount && !CREDIT_PRESETS.includes(parseInt(params.creditAmount, 10))
+      ? params.creditAmount
+      : ""
+  );
   const [message, setMessage] = useState("");
   const [senderName, setSenderName] = useState("");
   const [receiverName, setReceiverName] = useState("");
@@ -51,24 +70,25 @@ export default function CustomizeScreen() {
   const [selectedChannel, setSelectedChannel] = useState<DeliveryChannelType>("whatsapp");
 
   const { data: product } = useQuery<GiftProduct>({
-    queryKey: ["product", productId],
+    queryKey: ["product", params.productId],
     queryFn: async () => {
       const baseUrl = getApiUrl();
-      const res = await fetch(`${baseUrl}api/products/${productId}`);
+      const res = await fetch(`${baseUrl}api/products/${params.productId}`);
       return res.json();
     },
+    enabled: !isCredit && !!params.productId,
   });
 
   const { data: merchant } = useQuery<Merchant>({
-    queryKey: ["merchant", merchantId],
+    queryKey: ["merchant", params.merchantId],
     queryFn: async () => {
       const baseUrl = getApiUrl();
-      const res = await fetch(`${baseUrl}api/merchants/${merchantId}`);
+      const res = await fetch(`${baseUrl}api/merchants/${params.merchantId}`);
       return res.json();
     },
   });
 
-  const isValid = message.trim() && senderName.trim() && receiverName.trim() && receiverContact.trim();
+  const isValid = message.trim() && senderName.trim() && receiverName.trim() && receiverContact.trim() && (isCredit ? creditAmount > 0 : true);
 
   const handleContinue = () => {
     if (!isValid) return;
@@ -76,8 +96,10 @@ export default function CustomizeScreen() {
     router.push({
       pathname: "/gift/checkout",
       params: {
-        productId,
-        merchantId,
+        giftType,
+        productId: isCredit ? "" : (params.productId || ""),
+        merchantId: params.merchantId,
+        creditAmount: isCredit ? String(creditAmount) : "",
         message,
         senderName,
         receiverName,
@@ -88,7 +110,15 @@ export default function CustomizeScreen() {
     });
   };
 
-  if (!product || !merchant) {
+  if (!isCredit && !product) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  if (!merchant) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color={Colors.primary} />
@@ -122,19 +152,78 @@ export default function CustomizeScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.productPreview}>
-          <Image
-            source={{ uri: product.imageUrl }}
-            style={styles.previewImage}
-            contentFit="cover"
-            transition={300}
-          />
-          <View style={styles.previewInfo}>
-            <Text style={styles.previewTitle}>{product.title}</Text>
-            <Text style={styles.previewMerchant}>{merchant.name}</Text>
-            <Text style={styles.previewPrice}>${product.price}</Text>
+        {isCredit ? (
+          <View style={styles.creditPreview}>
+            <View style={styles.creditIconBox}>
+              <Ionicons name="card-outline" size={28} color="#FFF" />
+            </View>
+            <View style={styles.creditPreviewInfo}>
+              <Text style={styles.creditPreviewTitle}>Store Credit</Text>
+              <Text style={styles.creditPreviewMerchant}>{merchant.name}</Text>
+              <Text style={styles.creditPreviewAmount}>LBP {formatLBP(creditAmount)}</Text>
+            </View>
           </View>
-        </View>
+        ) : (
+          <View style={styles.productPreview}>
+            <Image
+              source={{ uri: product!.imageUrl }}
+              style={styles.previewImage}
+              contentFit="cover"
+              transition={300}
+            />
+            <View style={styles.previewInfo}>
+              <Text style={styles.previewTitle}>{product!.title}</Text>
+              <Text style={styles.previewMerchant}>{merchant.name}</Text>
+              <Text style={styles.previewPrice}>${product!.price}</Text>
+            </View>
+          </View>
+        )}
+
+        {isCredit && (
+          <>
+            <Text style={styles.sectionLabel}>Credit Amount</Text>
+            <View style={styles.creditPillRow}>
+              {CREDIT_PRESETS.map((val) => (
+                <Pressable
+                  key={val}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setCreditAmount(val);
+                    setCustomCreditInput("");
+                  }}
+                  style={[
+                    styles.creditPill,
+                    creditAmount === val && !customCreditInput && styles.creditPillActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.creditPillText,
+                      creditAmount === val && !customCreditInput && styles.creditPillTextActive,
+                    ]}
+                  >
+                    LBP {formatLBP(val)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.customCreditRow}>
+              <Text style={styles.customCreditLabel}>LBP</Text>
+              <TextInput
+                style={styles.customCreditInput}
+                value={customCreditInput}
+                onChangeText={(text) => {
+                  setCustomCreditInput(text);
+                  const parsed = parseInt(text.replace(/[^0-9]/g, ""), 10);
+                  if (parsed > 0) setCreditAmount(parsed);
+                }}
+                placeholder="Custom amount"
+                placeholderTextColor={Colors.textMuted}
+                keyboardType="number-pad"
+              />
+            </View>
+          </>
+        )}
 
         <Text style={styles.sectionLabel}>Your Name</Text>
         <TextInput
@@ -337,6 +426,95 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.primary,
     marginTop: 4,
+  },
+  creditPreview: {
+    flexDirection: "row",
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    overflow: "hidden",
+    marginBottom: 24,
+    padding: 16,
+    alignItems: "center",
+    gap: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  creditIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  creditPreviewInfo: {
+    flex: 1,
+  },
+  creditPreviewTitle: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 16,
+    color: Colors.text,
+  },
+  creditPreviewMerchant: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  creditPreviewAmount: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 18,
+    color: Colors.primary,
+    marginTop: 4,
+  },
+  creditPillRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 10,
+    flexWrap: "wrap",
+  },
+  creditPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  creditPillActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  creditPillText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    color: Colors.text,
+  },
+  creditPillTextActive: {
+    color: "#FFF",
+  },
+  customCreditRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  customCreditLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  customCreditInput: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontFamily: "Inter_500Medium",
+    fontSize: 15,
+    color: Colors.text,
   },
   sectionLabel: {
     fontFamily: "Inter_600SemiBold",

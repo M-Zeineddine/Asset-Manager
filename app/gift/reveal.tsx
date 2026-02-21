@@ -28,6 +28,10 @@ import { getApiUrl } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
 import type { GiftOrder, GiftProduct, Merchant } from "@/shared/schema";
 
+function formatLBP(amount: number): string {
+  return amount.toLocaleString("en-US");
+}
+
 export default function RevealScreen() {
   const insets = useSafeAreaInsets();
   const { orderId, giftToken } = useLocalSearchParams<{
@@ -53,6 +57,8 @@ export default function RevealScreen() {
     },
   });
 
+  const isCredit = order?.giftType === "CREDIT";
+
   const { data: product } = useQuery<GiftProduct>({
     queryKey: ["product", order?.productId],
     queryFn: async () => {
@@ -60,7 +66,7 @@ export default function RevealScreen() {
       const res = await fetch(`${baseUrl}api/products/${order!.productId}`);
       return res.json();
     },
-    enabled: !!order,
+    enabled: !!order && !isCredit && !!order.productId,
   });
 
   const { data: merchant } = useQuery<Merchant>({
@@ -125,6 +131,13 @@ export default function RevealScreen() {
     );
   }
 
+  const revealTitle = isCredit
+    ? "Store Credit"
+    : (product?.title || "Gift");
+  const revealSubtitle = isCredit
+    ? `LBP ${formatLBP(order.creditAmount || 0)} credit`
+    : "";
+
   return (
     <LinearGradient
       colors={themeColors as [string, string, ...string[]]}
@@ -168,19 +181,30 @@ export default function RevealScreen() {
           pointerEvents={revealed ? "auto" : "none"}
         >
           <View style={styles.revealedCard}>
-            {product && (
-              <Image
-                source={{ uri: product.imageUrl }}
-                style={styles.revealedImage}
-                contentFit="cover"
-                transition={300}
-              />
+            {isCredit ? (
+              <View style={styles.creditRevealHeader}>
+                <Ionicons name="card" size={40} color="#FFF" />
+                <Text style={styles.creditRevealLabel}>Store Credit</Text>
+                <Text style={styles.creditRevealAmount}>
+                  LBP {formatLBP(order.creditAmount || 0)}
+                </Text>
+                <Text style={styles.creditRevealInstruction}>
+                  Apply to your bill
+                </Text>
+              </View>
+            ) : (
+              product && (
+                <Image
+                  source={{ uri: product.imageUrl }}
+                  style={styles.revealedImage}
+                  contentFit="cover"
+                  transition={300}
+                />
+              )
             )}
 
             <View style={styles.revealedContent}>
-              <Text style={styles.revealedProductTitle}>
-                {product?.title || "Gift"}
-              </Text>
+              <Text style={styles.revealedProductTitle}>{revealTitle}</Text>
               <Text style={styles.revealedMerchant}>
                 {merchant?.name || ""}
               </Text>
@@ -314,6 +338,31 @@ const styles = StyleSheet.create({
   revealedImage: {
     width: "100%",
     height: 200,
+  },
+  creditRevealHeader: {
+    backgroundColor: Colors.primary,
+    padding: 28,
+    alignItems: "center",
+    gap: 6,
+  },
+  creditRevealLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    color: "rgba(255,255,255,0.8)",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginTop: 4,
+  },
+  creditRevealAmount: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 28,
+    color: "#FFF",
+  },
+  creditRevealInstruction: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    color: "rgba(255,255,255,0.7)",
+    marginTop: 2,
   },
   revealedContent: {
     padding: 20,
