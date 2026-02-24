@@ -26,6 +26,13 @@ function setupCors(app: express.Application) {
         origins.add(`https://${d.trim()}`);
       });
     }
+    if (process.env.ALLOWED_ORIGINS) {
+      process.env.ALLOWED_ORIGINS.split(",").forEach((d) => {
+        const trimmed = d.trim();
+        if (!trimmed) return;
+        origins.add(trimmed);
+      });
+    }
 
     const origin = req.header("origin");
 
@@ -33,8 +40,9 @@ function setupCors(app: express.Application) {
     const isLocalhost =
       origin?.startsWith("http://localhost:") ||
       origin?.startsWith("http://127.0.0.1:");
+    const isDevTunnel = origin?.endsWith(".devtunnels.ms");
 
-    if (origin && (origins.has(origin) || isLocalhost)) {
+    if (origin && (origins.has(origin) || isLocalhost || isDevTunnel)) {
       res.header("Access-Control-Allow-Origin", origin);
       res.header(
         "Access-Control-Allow-Methods",
