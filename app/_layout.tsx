@@ -21,6 +21,9 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerShown: false, headerBackTitle: "Back" }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="merchant/[id]" />
+      <Stack.Screen name="merchant/portal" />
+      <Stack.Screen name="merchant/redeem" />
+      <Stack.Screen name="merchant/history" />
       <Stack.Screen
         name="gift/customize"
         options={{ presentation: "card" }}

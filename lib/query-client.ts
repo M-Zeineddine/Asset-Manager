@@ -1,20 +1,47 @@
 import { fetch } from "expo/fetch";
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import Constants from "expo-constants";
+import { Platform } from "react-native";
 
 /**
  * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
  * @returns {string} The API base URL
  */
 export function getApiUrl(): string {
-  let host = process.env.EXPO_PUBLIC_DOMAIN;
-
-  if (!host) {
-    throw new Error("EXPO_PUBLIC_DOMAIN is not set");
+  const envHost = process.env.EXPO_PUBLIC_DOMAIN;
+  const configHost =
+    (Constants.expoConfig as any)?.extra?.publicDomain ||
+    (Constants as any)?.manifest?.extra?.publicDomain ||
+    (Constants as any)?.manifest2?.extra?.publicDomain;
+  const hostFromConfig = envHost || configHost;
+  if (hostFromConfig) {
+    const hasScheme =
+      hostFromConfig.startsWith("http://") || hostFromConfig.startsWith("https://");
+    const scheme = hasScheme
+      ? ""
+      : hostFromConfig.includes("localhost") || hostFromConfig.includes("127.0.0.1")
+      ? "http://"
+      : "https://";
+    const url = new URL(`${scheme}${hostFromConfig}`);
+    return url.href.endsWith("/") ? url.href : `${url.href}/`;
   }
 
-  let url = new URL(`https://${host}`);
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    return `${window.location.origin}/`;
+  }
 
-  return url.href;
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any)?.manifest?.debuggerHost ||
+    (Constants as any)?.manifest2?.extra?.expoClient?.hostUri ||
+    "";
+
+  const host = hostUri.split(":")[0];
+  if (!host) {
+    throw new Error("EXPO_PUBLIC_DOMAIN is not set and hostUri is unavailable");
+  }
+
+  return `http://${host}:5000/`;
 }
 
 async function throwIfResNotOk(res: Response) {

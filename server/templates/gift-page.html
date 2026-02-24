@@ -163,8 +163,12 @@
           if (!orderRes.ok) throw new Error('Not found');
           const order = await orderRes.json();
 
-          const productRes = await fetch('/api/products/' + order.productId);
-          const product = await productRes.json();
+          const isCredit = order.giftType === 'CREDIT';
+          let product = null;
+          if (!isCredit) {
+            const productRes = await fetch('/api/products/' + order.productId);
+            product = await productRes.json();
+          }
 
           const merchantRes = await fetch('/api/merchants/' + order.merchantId);
           const merchant = await merchantRes.json();
@@ -189,6 +193,34 @@
             year: 'numeric', month: 'long', day: 'numeric'
           });
 
+          const giftDetailsHtml = isCredit
+            ? `
+              <div class="gift-details">
+                <div class="gift-info">
+                  <h3>Store Credit</h3>
+                  <p>${merchant.name}</p>
+                  <div class="gift-price">LBP ${Number(order.creditAmount || 0).toLocaleString('en-US')}</div>
+                  <p style="margin-top:6px;font-size:12px;color:#6B6B6B;">
+                    Remaining: LBP ${Number(order.creditRemaining ?? order.creditAmount ?? 0).toLocaleString('en-US')}
+                  </p>
+                </div>
+              </div>
+            `
+            : `
+              <div class="gift-details">
+                <img src="${product.imageUrl}" class="gift-image" alt="${product.title}" />
+                <div class="gift-info">
+                  <h3>${product.title}</h3>
+                  <p>${merchant.name}</p>
+                  <div class="gift-price">$${product.price}</div>
+                </div>
+              </div>
+            `;
+
+          const instructions = isCredit
+            ? "Merchant will deduct an amount at redemption. Unused balance remains available until expiry."
+            : "Show this code to the merchant staff to redeem your gift";
+
           card.innerHTML = `
             <div class="card-header" style="background: linear-gradient(135deg, ${themeColors[0]}, ${themeColors[1]}, ${themeColors[2]})">
               <div class="gift-icon">&#127873;</div>
@@ -201,20 +233,13 @@
                 <div class="message-text">"${order.message}"</div>
                 <div class="message-from">&mdash; ${order.senderName}</div>
               </div>
-              <div class="gift-details">
-                <img src="${product.imageUrl}" class="gift-image" alt="${product.title}" />
-                <div class="gift-info">
-                  <h3>${product.title}</h3>
-                  <p>${merchant.name}</p>
-                  <div class="gift-price">$${product.price}</div>
-                </div>
-              </div>
+              ${giftDetailsHtml}
               <div class="qr-section">
                 <div id="qr-code"></div>
                 <div class="redeem-label">Redemption Code</div>
                 <div class="redeem-code">${order.redeemCode}</div>
               </div>
-              <p class="instructions">Show this code to the merchant staff to redeem your gift</p>
+              <p class="instructions">${instructions}</p>
               <div class="merchant-info">
                 <h4>${merchant.name}</h4>
                 <div class="merchant-detail">${merchant.address}</div>

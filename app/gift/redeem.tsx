@@ -43,6 +43,7 @@ export default function RedeemScreen() {
   });
 
   const isCredit = order?.giftType === "CREDIT";
+  const creditRemaining = order?.creditRemaining ?? order?.creditAmount ?? 0;
 
   const { data: product } = useQuery<GiftProduct>({
     queryKey: ["product", order?.productId],
@@ -150,6 +151,9 @@ export default function RedeemScreen() {
                 <Text style={styles.creditAmountText}>
                   LBP {formatLBP(order.creditAmount || 0)}
                 </Text>
+                <Text style={styles.creditRemainingText}>
+                  Remaining: LBP {formatLBP(creditRemaining)}
+                </Text>
               </View>
             </View>
           ) : (
@@ -176,7 +180,7 @@ export default function RedeemScreen() {
               <View style={styles.creditNote}>
                 <Ionicons name="information-circle-outline" size={18} color={Colors.primary} />
                 <Text style={styles.creditNoteText}>
-                  This is a one-time use store credit. Present this code to apply the full amount to your bill.
+                  Merchant will deduct an amount at redemption. Unused balance remains available until expiry.
                 </Text>
               </View>
             </>
@@ -397,6 +401,12 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     fontSize: 18,
     color: Colors.primary,
+    marginTop: 4,
+  },
+  creditRemainingText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+    color: Colors.textSecondary,
     marginTop: 4,
   },
   creditNote: {

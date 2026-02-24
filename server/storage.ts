@@ -5,8 +5,10 @@ import type {
   GiftOrder,
   CreateGiftOrderInput,
   GiftOrderStatusType,
+  CreditRedemption,
+  MerchantUser,
 } from "../shared/schema";
-import { merchants as seedMerchants, giftProducts as seedProducts } from "./seed-data";
+import { merchants as seedMerchants, giftProducts as seedProducts, merchantUsers as seedMerchantUsers } from "./seed-data";
 
 function generateRedeemCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -21,6 +23,9 @@ class Storage {
   private merchants: Map<string, Merchant> = new Map();
   private products: Map<string, GiftProduct> = new Map();
   private orders: Map<string, GiftOrder> = new Map();
+  private creditRedemptions: Map<string, CreditRedemption[]> = new Map();
+  private merchantUsers: Map<string, MerchantUser & { password: string }> = new Map();
+  private merchantSessions: Map<string, MerchantUser> = new Map();
 
   constructor() {
     for (const m of seedMerchants) {
@@ -28,6 +33,9 @@ class Storage {
     }
     for (const p of seedProducts) {
       this.products.set(p.id, p);
+    }
+    for (const u of seedMerchantUsers) {
+      this.merchantUsers.set(u.id, u);
     }
   }
 
@@ -75,13 +83,21 @@ class Storage {
     let currency: string;
     let productId: string | null = null;
     let creditAmount: number | null = null;
+    let creditRemaining: number | null = null;
 
     if (giftType === "CREDIT") {
+      if (!merchant.creditIsEnabled) {
+        throw new Error("Store credit is not enabled for this merchant");
+      }
       if (!input.creditAmount || input.creditAmount <= 0) {
         throw new Error("Credit amount must be positive");
       }
+      if (input.creditAmount < merchant.creditMinAmount || input.creditAmount > merchant.creditMaxAmount) {
+        throw new Error("Credit amount is outside the allowed range");
+      }
       amount = input.creditAmount;
       creditAmount = input.creditAmount;
+      creditRemaining = input.creditAmount;
       currency = "LBP";
     } else {
       if (!input.productId) throw new Error("Product ID required for ITEM gifts");
@@ -110,6 +126,7 @@ class Storage {
       merchantId: input.merchantId,
       amount,
       creditAmount,
+      creditRemaining,
       currency,
       message: input.message,
       themeId: input.themeId,
@@ -120,6 +137,7 @@ class Storage {
       scheduledSendAt: input.scheduledSendAt || null,
       sentAt: now.toISOString(),
       redeemedAt: null,
+      redeemedByMerchantUserId: null,
       expiresAt: expiresAt.toISOString(),
     };
 
@@ -140,8 +158,9 @@ class Storage {
   }
 
   async redeemOrder(redeemCode: string): Promise<GiftOrder | null> {
+    const normalized = redeemCode.trim().toUpperCase();
     for (const order of this.orders.values()) {
-      if (order.redeemCode === redeemCode) {
+      if (order.redeemCode === normalized) {
         if (order.status === "REDEEMED") {
           return null;
         }
@@ -160,6 +179,95 @@ class Storage {
     return Array.from(this.orders.values()).filter(
       (o) => o.merchantId === merchantId
     );
+  }
+
+  async authenticateMerchant(email: string, password: string): Promise<MerchantUser | null> {
+    for (const user of this.merchantUsers.values()) {
+      if (user.email.toLowerCase() === email.toLowerCase() && user.password === password) {
+        if (!user.isActive) return null;
+        const { password: _pw, ...publicUser } = user;
+        return publicUser;
+      }
+    }
+    return null;
+  }
+
+  async createMerchantSession(user: MerchantUser): Promise<string> {
+    const token = randomUUID();
+    this.merchantSessions.set(token, user);
+    return token;
+  }
+
+  async getMerchantUserByToken(token: string): Promise<MerchantUser | null> {
+    return this.merchantSessions.get(token) || null;
+  }
+
+  async findOrderByRedeemCode(redeemCode: string): Promise<GiftOrder | null> {
+    const normalized = redeemCode.trim().toUpperCase();
+    for (const order of this.orders.values()) {
+      if (order.redeemCode === normalized) {
+        return order;
+      }
+    }
+    return null;
+  }
+
+  async getCreditRedemptions(orderId: string): Promise<CreditRedemption[]> {
+    return this.creditRedemptions.get(orderId) || [];
+  }
+
+  async redeemItemOrder(redeemCode: string, merchantUserId: string): Promise<GiftOrder | null> {
+    const order = await this.findOrderByRedeemCode(redeemCode);
+    if (!order) return null;
+    if (order.giftType !== "ITEM") return null;
+    if (order.status === "REDEEMED" || order.status === "EXPIRED" || order.status === "CANCELED") {
+      return null;
+    }
+    order.status = "REDEEMED" as GiftOrderStatusType;
+    order.redeemedAt = new Date().toISOString();
+    order.redeemedByMerchantUserId = merchantUserId;
+    return order;
+  }
+
+  async redeemCreditOrder(
+    redeemCode: string,
+    amountToDeduct: number,
+    merchantUserId: string
+  ): Promise<{ order: GiftOrder; redemption: CreditRedemption } | null> {
+    const order = await this.findOrderByRedeemCode(redeemCode);
+    if (!order) return null;
+    if (order.giftType !== "CREDIT") return null;
+    if (order.status === "REDEEMED" || order.status === "EXPIRED" || order.status === "CANCELED") {
+      return null;
+    }
+    if (order.creditRemaining == null) {
+      order.creditRemaining = order.creditAmount || 0;
+    }
+    if (!order.creditRemaining || order.creditRemaining <= 0) return null;
+    if (!amountToDeduct || amountToDeduct <= 0) return null;
+    if (amountToDeduct > order.creditRemaining) return null;
+
+    const redemption: CreditRedemption = {
+      id: randomUUID(),
+      amountDeducted: amountToDeduct,
+      deductedAt: new Date().toISOString(),
+      merchantUserId,
+      notes: null,
+    };
+
+    const existing = this.creditRedemptions.get(order.id) || [];
+    existing.push(redemption);
+    this.creditRedemptions.set(order.id, existing);
+
+    order.creditRemaining = Math.max(0, order.creditRemaining - amountToDeduct);
+
+    if (order.creditRemaining === 0) {
+      order.status = "REDEEMED" as GiftOrderStatusType;
+      order.redeemedAt = new Date().toISOString();
+      order.redeemedByMerchantUserId = merchantUserId;
+    }
+
+    return { order, redemption };
   }
 }
 

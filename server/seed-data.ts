@@ -1,4 +1,4 @@
-import type { Merchant, GiftProduct, CategoryType } from "../shared/schema";
+import type { Merchant, GiftProduct, CategoryType, MerchantRoleType } from "../shared/schema";
 
 export const merchants: Merchant[] = [
   {
@@ -15,6 +15,10 @@ export const merchants: Merchant[] = [
     isActive: true,
     rating: 4.8,
     reviewCount: 324,
+    creditMinAmount: 250000,
+    creditMaxAmount: 5000000,
+    creditPresetAmounts: [500000, 1000000, 2000000],
+    creditIsEnabled: true,
   },
   {
     id: "merchant-2",
@@ -30,6 +34,10 @@ export const merchants: Merchant[] = [
     isActive: true,
     rating: 4.9,
     reviewCount: 567,
+    creditMinAmount: 0,
+    creditMaxAmount: 0,
+    creditPresetAmounts: [],
+    creditIsEnabled: false,
   },
   {
     id: "merchant-3",
@@ -45,6 +53,46 @@ export const merchants: Merchant[] = [
     isActive: true,
     rating: 4.7,
     reviewCount: 198,
+    creditMinAmount: 300000,
+    creditMaxAmount: 4000000,
+    creditPresetAmounts: [500000, 1000000, 1500000],
+    creditIsEnabled: true,
+  },
+];
+
+export type MerchantUserSeed = {
+  id: string;
+  merchantId: string;
+  role: MerchantRoleType;
+  email: string;
+  password: string;
+  isActive: boolean;
+};
+
+export const merchantUsers: MerchantUserSeed[] = [
+  {
+    id: "merchant-user-1",
+    merchantId: "merchant-1",
+    role: "owner",
+    email: "owner@cafenazih.com",
+    password: "localtreats",
+    isActive: true,
+  },
+  {
+    id: "merchant-user-2",
+    merchantId: "merchant-1",
+    role: "staff",
+    email: "staff@cafenazih.com",
+    password: "localtreats",
+    isActive: true,
+  },
+  {
+    id: "merchant-user-3",
+    merchantId: "merchant-3",
+    role: "owner",
+    email: "owner@tawletbyblos.com",
+    password: "localtreats",
+    isActive: true,
   },
 ];
 

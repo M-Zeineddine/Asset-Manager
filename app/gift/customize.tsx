@@ -35,7 +35,7 @@ const CHANNELS: { key: DeliveryChannelType; label: string; icon: string }[] = [
   { key: "email", label: "Email", icon: "mail-outline" },
 ];
 
-const CREDIT_PRESETS = [500000, 1000000, 2000000];
+const DEFAULT_CREDIT_PRESETS = [500000, 1000000, 2000000];
 
 function formatLBP(amount: number): string {
   return amount.toLocaleString("en-US");
@@ -55,10 +55,10 @@ export default function CustomizeScreen() {
   const isCredit = giftType === "CREDIT";
 
   const [creditAmount, setCreditAmount] = useState(
-    params.creditAmount ? parseInt(params.creditAmount, 10) : 500000
+    params.creditAmount ? parseInt(params.creditAmount, 10) : DEFAULT_CREDIT_PRESETS[0]
   );
   const [customCreditInput, setCustomCreditInput] = useState(
-    params.creditAmount && !CREDIT_PRESETS.includes(parseInt(params.creditAmount, 10))
+    params.creditAmount && !DEFAULT_CREDIT_PRESETS.includes(parseInt(params.creditAmount, 10))
       ? params.creditAmount
       : ""
   );
@@ -88,7 +88,24 @@ export default function CustomizeScreen() {
     },
   });
 
-  const isValid = message.trim() && senderName.trim() && receiverName.trim() && receiverContact.trim() && (isCredit ? creditAmount > 0 : true);
+  const creditEnabled = merchant?.creditIsEnabled ?? true;
+  const presetAmounts =
+    merchant?.creditPresetAmounts && merchant.creditPresetAmounts.length > 0
+      ? merchant.creditPresetAmounts
+      : DEFAULT_CREDIT_PRESETS;
+  const minAmount = merchant?.creditMinAmount || 0;
+  const maxAmount = merchant?.creditMaxAmount || 0;
+  const creditInRange =
+    !isCredit ||
+    (!minAmount || creditAmount >= minAmount) &&
+    (!maxAmount || creditAmount <= maxAmount);
+
+  const isValid =
+    message.trim() &&
+    senderName.trim() &&
+    receiverName.trim() &&
+    receiverContact.trim() &&
+    (isCredit ? creditEnabled && creditAmount > 0 && creditInRange : true);
 
   const handleContinue = () => {
     if (!isValid) return;
@@ -181,47 +198,72 @@ export default function CustomizeScreen() {
 
         {isCredit && (
           <>
-            <Text style={styles.sectionLabel}>Credit Amount</Text>
-            <View style={styles.creditPillRow}>
-              {CREDIT_PRESETS.map((val) => (
-                <Pressable
-                  key={val}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setCreditAmount(val);
-                    setCustomCreditInput("");
-                  }}
-                  style={[
-                    styles.creditPill,
-                    creditAmount === val && !customCreditInput && styles.creditPillActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.creditPillText,
-                      creditAmount === val && !customCreditInput && styles.creditPillTextActive,
-                    ]}
-                  >
-                    LBP {formatLBP(val)}
+            {!creditEnabled ? (
+              <View style={styles.creditDisabled}>
+                <Ionicons name="alert-circle-outline" size={18} color={Colors.error} />
+                <Text style={styles.creditDisabledText}>
+                  Store credit is not enabled for this merchant.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.sectionLabel}>Credit Amount</Text>
+                <View style={styles.creditPillRow}>
+                  {presetAmounts.map((val) => (
+                    <Pressable
+                      key={val}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setCreditAmount(val);
+                        setCustomCreditInput("");
+                      }}
+                      style={[
+                        styles.creditPill,
+                        creditAmount === val && !customCreditInput && styles.creditPillActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.creditPillText,
+                          creditAmount === val && !customCreditInput && styles.creditPillTextActive,
+                        ]}
+                      >
+                        LBP {formatLBP(val)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={styles.customCreditRow}>
+                  <Text style={styles.customCreditLabel}>LBP</Text>
+                  <TextInput
+                    style={styles.customCreditInput}
+                    value={customCreditInput}
+                    onChangeText={(text) => {
+                      setCustomCreditInput(text);
+                      const parsed = parseInt(text.replace(/[^0-9]/g, ""), 10);
+                      if (parsed > 0) setCreditAmount(parsed);
+                    }}
+                    placeholder="Custom amount"
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <Text style={styles.creditRangeText}>
+                  Min LBP {formatLBP(minAmount)} - Max LBP {formatLBP(maxAmount)}
+                </Text>
+                {!creditInRange && (
+                  <Text style={styles.rangeErrorText}>
+                    Enter an amount between LBP {formatLBP(minAmount)} and LBP {formatLBP(maxAmount)}
                   </Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={styles.customCreditRow}>
-              <Text style={styles.customCreditLabel}>LBP</Text>
-              <TextInput
-                style={styles.customCreditInput}
-                value={customCreditInput}
-                onChangeText={(text) => {
-                  setCustomCreditInput(text);
-                  const parsed = parseInt(text.replace(/[^0-9]/g, ""), 10);
-                  if (parsed > 0) setCreditAmount(parsed);
-                }}
-                placeholder="Custom amount"
-                placeholderTextColor={Colors.textMuted}
-                keyboardType="number-pad"
-              />
-            </View>
+                )}
+                <View style={styles.creditDisclaimer}>
+                  <Ionicons name="information-circle-outline" size={16} color={Colors.textSecondary} />
+                  <Text style={styles.creditDisclaimerText}>
+                    Redeemable only at {merchant.name}. Unused balance remains available until expiry.
+                  </Text>
+                </View>
+              </>
+            )}
           </>
         )}
 
@@ -492,6 +534,49 @@ const styles = StyleSheet.create({
   },
   creditPillTextActive: {
     color: "#FFF",
+  },
+  creditRangeText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginBottom: 6,
+  },
+  rangeErrorText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: Colors.error,
+    marginBottom: 10,
+  },
+  creditDisclaimer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "rgba(196, 69, 54, 0.06)",
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  creditDisclaimerText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    flex: 1,
+    lineHeight: 16,
+  },
+  creditDisabled: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(229, 57, 53, 0.08)",
+    marginBottom: 10,
+  },
+  creditDisabledText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: Colors.error,
+    flex: 1,
   },
   customCreditRow: {
     flexDirection: "row",

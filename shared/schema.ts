@@ -50,6 +50,10 @@ export interface Merchant {
   isActive: boolean;
   rating: number;
   reviewCount: number;
+  creditMinAmount: number;
+  creditMaxAmount: number;
+  creditPresetAmounts: number[];
+  creditIsEnabled: boolean;
 }
 
 export interface GiftProduct {
@@ -76,6 +80,7 @@ export interface GiftOrder {
   merchantId: string;
   amount: number;
   creditAmount: number | null;
+  creditRemaining: number | null;
   currency: string;
   message: string;
   themeId: string;
@@ -86,7 +91,26 @@ export interface GiftOrder {
   scheduledSendAt: string | null;
   sentAt: string | null;
   redeemedAt: string | null;
+  redeemedByMerchantUserId: string | null;
   expiresAt: string;
+}
+
+export interface CreditRedemption {
+  id: string;
+  amountDeducted: number;
+  deductedAt: string;
+  merchantUserId: string;
+  notes?: string | null;
+}
+
+export type MerchantRoleType = "owner" | "staff";
+
+export interface MerchantUser {
+  id: string;
+  merchantId: string;
+  role: MerchantRoleType;
+  email: string;
+  isActive: boolean;
 }
 
 export const createGiftOrderSchema = z.object({

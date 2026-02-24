@@ -97,6 +97,16 @@ export default function SuccessScreen() {
     });
   };
 
+  const handleCopyLink = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const clipboard = (globalThis as any)?.navigator?.clipboard;
+    if (clipboard && Platform.OS === "web") {
+      await clipboard.writeText(giftUrl);
+      return;
+    }
+    await Share.share({ message: giftUrl, url: giftUrl });
+  };
+
   return (
     <View
       style={[
@@ -144,6 +154,17 @@ export default function SuccessScreen() {
         >
           <Ionicons name="share-outline" size={20} color={Colors.primary} />
           <Text style={styles.shareText}>Share Gift Link</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={handleCopyLink}
+          style={({ pressed }) => [
+            styles.copyButton,
+            pressed && { opacity: 0.9 },
+          ]}
+        >
+          <Ionicons name="copy-outline" size={18} color={Colors.textSecondary} />
+          <Text style={styles.copyText}>Copy Link</Text>
         </Pressable>
 
         <Pressable
@@ -250,6 +271,22 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     fontSize: 16,
     color: Colors.primary,
+  },
+  copyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.surface,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  copyText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 15,
+    color: Colors.textSecondary,
   },
   previewButton: {
     flexDirection: "row",

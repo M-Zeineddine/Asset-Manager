@@ -42,6 +42,9 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "publicDomain": "asset-manager-zu1v.onrender.com"
     }
   }
 }

@@ -17,6 +17,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { getApiUrl, apiRequest } from "@/lib/query-client";
+import { paymentProvider } from "@/lib/payment-provider";
 import { fetch } from "expo/fetch";
 import type { GiftProduct, Merchant, GiftOrder } from "@/shared/schema";
 
@@ -64,6 +65,19 @@ export default function CheckoutScreen() {
 
   const orderMutation = useMutation({
     mutationFn: async () => {
+      const amount = isCredit ? creditAmount : (product?.price || 0);
+      const currency = isCredit ? "LBP" : (product?.currency || "USD");
+      const paymentResult = await paymentProvider.pay({
+        amount,
+        currency,
+        metadata: {
+          giftType: params.giftType || "ITEM",
+          merchantId: params.merchantId,
+        },
+      });
+      if (!paymentResult.success) {
+        throw new Error(paymentResult.errorMessage || "Payment failed");
+      }
       const body: any = {
         giftType: params.giftType || "ITEM",
         senderName: params.senderName,
@@ -92,7 +106,7 @@ export default function CheckoutScreen() {
           giftToken: order.giftToken,
           receiverName: params.receiverName,
           senderName: params.senderName,
-          productTitle: isCredit ? `Store Credit – LBP ${formatLBP(creditAmount)}` : (product?.title || ""),
+          productTitle: isCredit ? `Store Credit - LBP ${formatLBP(creditAmount)}` : (product?.title || ""),
           merchantName: merchant?.name || "",
         },
       });

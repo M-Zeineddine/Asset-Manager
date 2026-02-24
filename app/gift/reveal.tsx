@@ -188,6 +188,9 @@ export default function RevealScreen() {
                 <Text style={styles.creditRevealAmount}>
                   LBP {formatLBP(order.creditAmount || 0)}
                 </Text>
+                <Text style={styles.creditRevealRemaining}>
+                  Remaining: LBP {formatLBP(order.creditRemaining ?? order.creditAmount ?? 0)}
+                </Text>
                 <Text style={styles.creditRevealInstruction}>
                   Apply to your bill
                 </Text>
@@ -357,6 +360,12 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     fontSize: 28,
     color: "#FFF",
+  },
+  creditRevealRemaining: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+    color: "rgba(255,255,255,0.9)",
+    marginTop: 2,
   },
   creditRevealInstruction: {
     fontFamily: "Inter_400Regular",

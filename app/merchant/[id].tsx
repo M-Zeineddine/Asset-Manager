@@ -21,12 +21,6 @@ import { getApiUrl } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
 import type { Merchant, GiftProduct } from "@/shared/schema";
 
-const CREDIT_PRESETS = [
-  { label: "LBP 500,000", value: 500000 },
-  { label: "LBP 1,000,000", value: 1000000 },
-  { label: "LBP 2,000,000", value: 2000000 },
-];
-
 function formatLBP(amount: number): string {
   return amount.toLocaleString("en-US");
 }
@@ -34,6 +28,11 @@ function formatLBP(amount: number): string {
 function StoreCreditSection({ merchant }: { merchant: Merchant }) {
   const [showCustom, setShowCustom] = useState(false);
   const [customAmount, setCustomAmount] = useState("");
+  const presets = merchant.creditPresetAmounts || [];
+  const minAmount = merchant.creditMinAmount || 0;
+  const maxAmount = merchant.creditMaxAmount || 0;
+
+  if (!merchant.creditIsEnabled) return null;
 
   const handlePreset = (value: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -46,12 +45,19 @@ function StoreCreditSection({ merchant }: { merchant: Merchant }) {
   const handleCustom = () => {
     const parsed = parseInt(customAmount.replace(/[^0-9]/g, ""), 10);
     if (!parsed || parsed <= 0) return;
+    if ((minAmount && parsed < minAmount) || (maxAmount && parsed > maxAmount)) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push({
       pathname: "/gift/customize",
       params: { giftType: "CREDIT", merchantId: merchant.id, creditAmount: String(parsed) },
     });
   };
+
+  const parsedCustom = parseInt(customAmount.replace(/[^0-9]/g, ""), 10);
+  const customInRange =
+    !!parsedCustom &&
+    (!minAmount || parsedCustom >= minAmount) &&
+    (!maxAmount || parsedCustom <= maxAmount);
 
   return (
     <View style={styles.creditSection}>
@@ -66,20 +72,24 @@ function StoreCreditSection({ merchant }: { merchant: Merchant }) {
       </View>
 
       <View style={styles.presetRow}>
-        {CREDIT_PRESETS.map((preset) => (
+        {presets.map((value) => (
           <Pressable
-            key={preset.value}
-            onPress={() => handlePreset(preset.value)}
+            key={value}
+            onPress={() => handlePreset(value)}
             style={({ pressed }) => [
               styles.presetPill,
               pressed && { transform: [{ scale: 0.96 }] },
             ]}
           >
-            <Text style={styles.presetAmount}>LBP {formatLBP(preset.value)}</Text>
+            <Text style={styles.presetAmount}>LBP {formatLBP(value)}</Text>
             <Ionicons name="gift" size={14} color={Colors.primary} />
           </Pressable>
         ))}
       </View>
+
+      <Text style={styles.creditRangeText}>
+        Min LBP {formatLBP(minAmount)} - Max LBP {formatLBP(maxAmount)}
+      </Text>
 
       {!showCustom ? (
         <Pressable
@@ -106,16 +116,22 @@ function StoreCreditSection({ merchant }: { merchant: Merchant }) {
           />
           <Pressable
             onPress={handleCustom}
-            disabled={!customAmount || parseInt(customAmount.replace(/[^0-9]/g, ""), 10) <= 0}
+            disabled={!customInRange}
             style={({ pressed }) => [
               styles.customSendBtn,
-              (!customAmount || parseInt(customAmount.replace(/[^0-9]/g, ""), 10) <= 0) && { opacity: 0.4 },
+              !customInRange && { opacity: 0.4 },
               pressed && { opacity: 0.8 },
             ]}
           >
             <Ionicons name="arrow-forward" size={18} color="#FFF" />
           </Pressable>
         </View>
+      )}
+
+      {!customInRange && !!customAmount && (
+        <Text style={styles.rangeErrorText}>
+          Enter an amount between LBP {formatLBP(minAmount)} and LBP {formatLBP(maxAmount)}
+        </Text>
       )}
     </View>
   );
@@ -268,7 +284,9 @@ export default function MerchantScreen() {
               </View>
             </View>
 
-            <StoreCreditSection merchant={merchant} />
+            {merchant.creditIsEnabled && (
+              <StoreCreditSection merchant={merchant} />
+            )}
 
             <Text style={styles.sectionTitle}>Gift Ideas</Text>
           </View>
@@ -420,6 +438,12 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 10,
   },
+  creditRangeText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginBottom: 10,
+  },
   presetPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -478,6 +502,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
+  },
+  rangeErrorText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: Colors.error,
+    marginTop: 8,
   },
   sectionTitle: {
     fontFamily: "Inter_700Bold",
