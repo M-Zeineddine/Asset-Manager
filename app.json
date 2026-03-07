@@ -17,7 +17,10 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.localtreats",
       "buildNumber": "1",
-      "appleTeamId": "346JF2CT6X"
+      "appleTeamId": "346JF2CT6X",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.localtreats",
