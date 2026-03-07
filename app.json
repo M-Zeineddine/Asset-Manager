@@ -15,7 +15,9 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.localtreats"
+      "bundleIdentifier": "com.localtreats",
+      "buildNumber": "1",
+      "appleTeamId": "346JF2CT6X"
     },
     "android": {
       "package": "com.localtreats",
@@ -27,13 +29,14 @@
       }
     },
     "web": {
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "output": "static"
     },
     "plugins": [
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://asset-manager-zu1v.onrender.com"
         }
       ],
       "expo-font",
@@ -44,7 +47,13 @@
       "reactCompiler": true
     },
     "extra": {
-      "publicDomain": "asset-manager-zu1v.onrender.com"
+      "publicDomain": "asset-manager-zu1v.onrender.com",
+      "router": {
+        "origin": "https://asset-manager-zu1v.onrender.com"
+      },
+      "eas": {
+        "projectId": "10b010e0-6460-45eb-be36-03390da9f598"
+      }
     }
   }
 }
